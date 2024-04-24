@@ -159,7 +159,7 @@ assert(not AIO, "AIO is already loaded. Possibly different versions!")
 -- The defaults are recommended for normal use
 
 -- Enables some additional prints for debugging
-local AIO_ENABLE_DEBUG_MSGS = true -- default false
+local AIO_ENABLE_DEBUG_MSGS = false -- default false
 
 -- Enables pcall to silence errors and continue running normally when an error occurs
 -- If AIO_ENABLE_PCALL is true, errors are printed and running is continued
@@ -171,10 +171,10 @@ local AIO_ENABLE_PCALL = true -- default true
 -- on server side. Make sure you have default Eluna extensions in place.
 -- On client side uses _ERRORMESSAGE function to output errors with trace.
 -- Requires AIO_ENABLE_PCALL to be true
-local AIO_ENABLE_TRACEBACK = true -- default false
+local AIO_ENABLE_TRACEBACK = false -- default false
 
 -- prints all messages
-local AIO_ENABLE_MSGPRINT = true -- default false
+local AIO_ENABLE_MSGPRINT = false -- default false
 
 -- Max VM instructions to do before timeout
 -- Attempts to avoid server freeze on bad code and or user
@@ -213,7 +213,7 @@ local AIO_CODE_OBFUSCATE = true -- default true
 -- Setting to send client errors to server
 -- Client must have AIO_ENABLE_PCALL enabled
 -- Client side only
-local AIO_ERROR_LOG = true -- default false
+local AIO_ERROR_LOG = false -- default false
 
 ----------------------------------
 
@@ -246,14 +246,13 @@ local AIO_SERVER = type(GetLuaEngine) == "function"
 -- Client must have same version (basically same AIO file)
 local AIO_VERSION = 1.74
 -- ID characters for client-server messaging
-local AIO_ShortMsg          = "SM"
+local AIO_ShortMsg          = schar(1)..schar(1)
 local AIO_Compressed        = 'C'
 local AIO_Uncompressed      = 'U'
 local AIO_Prefix            = "AIO"
 AIO_Prefix = ssub((AIO_Prefix), 1, 16) -- shorten to max allowed
 local AIO_ServerPrefix = ssub(("S"..AIO_Prefix), 1, 16)
 local AIO_ClientPrefix = ssub(("C"..AIO_Prefix), 1, 16)
-
 assert(#AIO_ServerPrefix == #AIO_ClientPrefix)
 -- Client can send only 255 max size messages, but server can send more
 -- on different patches the limit varies, on 3.3.5 it is exactly 3004 and on cataclysm 2^23
@@ -326,7 +325,6 @@ end
 -- Converts a string (2 chars) to uint16 number
 -- Note that the chars can not be \0 character so the full uint16 range is not usable
 local function AIO_stringto16(str)
-	print("AIO_stringto16")
     local l = sbyte(ssub(str, 1,1)) -1
     local r = sbyte(ssub(str, 2,2)) -1
     local val = l*254 + r
@@ -471,10 +469,10 @@ end
 local function AIO_SendAddonMessage(msg, player)
     if AIO_SERVER then
         -- server -> client
-        player:SendAddonMessage(AIO_ServerPrefix, msg, player)
+        player:SendAddonMessage(AIO_ServerPrefix, msg, 7, player)
     else
         -- client -> server
-        C_ChatInfo.SendAddonMessage(AIO_ClientPrefix, AIO_ClientPrefix.."\t"..msg, "WHISPER", UnitName("player"))
+        SendAddonMessage(AIO_ClientPrefix, msg, "WHISPER", UnitName("player"))
     end
 end
 
@@ -622,7 +620,6 @@ end
 -- for adding handlers for blocks
 local preinitblocks = {}
 local function AIO_HandleBlock(player, data, skipstored)
-	print("AIO_HandleBlock: ", player, data, skipstored)
     local HandleName = data[2]
     assert(HandleName, "Invalid handle, no handle name")
 
@@ -661,7 +658,6 @@ local function AIO_Timeout()
     error(string.format("AIO Timeout. Your code ran over %s instructions with message:\n%s", ''..AIO_TIMEOUT_INSTRUCTIONCOUNT, (curmsg or 'nil')))
 end
 local function _AIO_ParseBlocks(msg, player)
-	print("_AIO_ParseBlocks:", msg, player)
     if AIO_SERVER and AIO_TIMEOUT_INSTRUCTIONCOUNT > 0 then
         curmsg = msg
         debug.sethook(AIO_Timeout, "", AIO_TIMEOUT_INSTRUCTIONCOUNT)
@@ -681,9 +677,8 @@ local function _AIO_ParseBlocks(msg, player)
 
     -- Handle parsing of all blocks
     for i = 1, #data do
-		print("AIO_pcall:", AIO_HandleBlock, player, data[i])
         -- Using pcall here so errors wont stop handling other blocks in the msg
-        AIO_pcall(AIO_HandleBlock, player, data[i], true)
+        AIO_pcall(AIO_HandleBlock, player, data[i])
     end
 
     if AIO_SERVER and AIO_TIMEOUT_INSTRUCTIONCOUNT > 0 then
@@ -697,15 +692,12 @@ end
 -- Handles cleaning and assembling the messages received
 -- Messages can be 255 characters long, so big messages will be split
 local function _AIO_HandleIncomingMsg(msg, player)
-	print("_AIO_HandleIncomingMsg: ", msg, ":", player)
     -- Received a long message part (msg split into 255 character parts)
     local msgid = ssub(msg, 1,2)
-	print("msgid: ", msg)
 
     if msgid == AIO_ShortMsg then
         -- Received <= 255 char msg, direct parse, take out the msg tag first
         AIO_ParseBlocks(ssub(msg, 3), player)
-		print("AIO_ParseBlocks: ", ssub(msg, 3), player)
         return
     end
 
@@ -794,7 +786,6 @@ local function _AIO_HandleIncomingMsg(msg, player)
     -- Has all parts, process
     if #data.parts == data.parts.n then
         local cat = tconcat(data.parts)
-		print("#data.parts: ", cat, player)
         RemoveData(guid, messageId)
         AIO_ParseBlocks(cat, player)
     end
@@ -905,8 +896,6 @@ if AIO_SERVER then
     -- in the same order as they are sent from the server.
     local versionmsg = AIO.Msg():Add("AIO", "Init", AIO_VERSION)
     function AIO_HANDLERS.Init(player, version, clientdata)
-		local name2 = strsplit("-",player,2)
-		print("Server AIO_HANDLERS.Init: ", player, version, clientdata)
         -- check that the player is not on cooldown for init calling
         local guid = player:GetGUIDLow()
         if timers[guid] then
@@ -918,7 +907,7 @@ if AIO_SERVER then
 
         -- Check for bad version and send version back for error directly
         if version ~= AIO_VERSION then
-            versionmsg:Send(name2)
+            versionmsg:Send(player)
             return
         end
 
@@ -939,14 +928,12 @@ if AIO_SERVER then
         end
 
         local initmsg = AIO.Msg():Add("AIO", "Init", AIO_VERSION, #AIO_ADDONSORDER, addons, cached)
-		print("server initmsg: ", initmsg)
 
         for k,v in ipairs(AIO_INITHOOKS) do
-			print("AIO_INITHOOKS", initmsg, ":", v)
-            initmsg = v(initmsg, name2) or initmsg
+            initmsg = v(initmsg, player) or initmsg
         end
 
-        initmsg:Send(name2)
+        initmsg:Send(player)
     end
 
     -- Handler that catches client errors
@@ -961,11 +948,9 @@ if AIO_SERVER then
     -- An addon message event handler for the lua engine
     -- If the message data is correct, move the message forward to the AIO message handler.
     local function ONADDONMSG(event, sender, Type, prefix, msg, target)
-		print("SERVER ONADDONMSG: ", event, sender, Type, prefix, msg, target)
-		if prefix == AIO_ClientPrefix and tostring(sender) == tostring(target) and #msg < 510 then
-			print("Check server event on addon msg: ", msg, sender)
+        if prefix == AIO_ClientPrefix and tostring(sender) == tostring(target) and #msg < 510 then
             AIO_HandleIncomingMsg(msg, sender)
-		end
+        end
     end
     RegisterServerEvent(30, ONADDONMSG)
 
@@ -1020,27 +1005,15 @@ else
     -- A client side event handler
     -- Passes the incoming message to AIO message handler if it is valid
     local function ONADDONMSG(self, event, prefix, msg, Type, sender)
-		local send = strsplit("-",sender,2)
-		local name = strsplit("-",UnitName("player"),2)
-		print("CLIENT ONADDONMSG: ", self, event, prefix, msg, Type, send)
-		if prefix == AIO_ServerPrefix then
-			print("CLIENT prefix check: ", prefix, AIO_ServerPrefix)
-            if event == "CHAT_MSG_ADDON" and send == name then
-				print("CLIENT event and sender check: ", event, send, name)
+        if prefix == AIO_ServerPrefix then
+            if event == "CHAT_MSG_ADDON" and sender == UnitName("player") then
                 -- Normal AIO message handling from addon messages
-                AIO_HandleIncomingMsg(msg, send)
+                AIO_HandleIncomingMsg(msg, sender)
             end
-		end
+        end
     end
     local MsgReceiver = CreateFrame("Frame")
     MsgReceiver:RegisterEvent("CHAT_MSG_ADDON")
-	MsgReceiver:RegisterEvent("CHAT_MSG_ADDON_LOGGED")
-    MsgReceiver:RegisterEvent("BN_CHAT_MSG_ADDON")
-    MsgReceiver:RegisterEvent("CHAT_MSG_WHISPER")    
-    MsgReceiver:RegisterEvent("CHAT_MSG_BN_WHISPER")   
-    MsgReceiver:RegisterEvent("CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE")   
-    MsgReceiver:RegisterEvent("CHAT_MSG_WHISPER_INFORM")   
-    MsgReceiver:RegisterEvent("CHAT_MSG_SYSTEM")       
     MsgReceiver:SetScript("OnEvent", ONADDONMSG)
 
     -- A block handler for Init name, checks the version number and errors out if needed
@@ -1058,7 +1031,6 @@ else
         assert(loadstring(compressedcode, name))()
     end
     function AIO_HANDLERS.Init(player, version, N, addons, cached)
-		print("Client AIO_HANDLERS.Init: ", player, version, N, addons, cached)
         if(AIO_VERSION ~= version) then
             AIO_INITED = true
             -- stop handling any incoming messages
@@ -1133,13 +1105,10 @@ else
         if event == "ADDON_LOADED" and addon == "AIO_Client" then
             -- Register addon channel on cata+
             local _,_,_, tocversion = GetBuildInfo()
-            if tocversion and tocversion >= 40100 and C_ChatInfo.RegisterAddonMessagePrefix then
-                C_ChatInfo.RegisterAddonMessagePrefix("C"..AIO_Prefix)
+            if tocversion and tocversion >= 40100 and RegisterAddonMessagePrefix then
+                RegisterAddonMessagePrefix("C"..AIO_Prefix)
             end
 
-			C_ChatInfo.RegisterAddonMessagePrefix(AIO_Prefix)
-            C_ChatInfo.RegisterAddonMessagePrefix(AIO_ServerPrefix)
-            C_ChatInfo.RegisterAddonMessagePrefix(AIO_ClientPrefix)
             -- Our saved variables are ready at this point. If there is no save, they will be nil
             -- Must be before any other addon action like sending init request
             if type(AIO_sv) ~= 'table' then
