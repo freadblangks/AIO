@@ -1010,7 +1010,7 @@ else
         if prefix == AIO_ServerPrefix then
             if event == "CHAT_MSG_ADDON" and send == name then
                 -- Normal AIO message handling from addon messages
-                AIO_HandleIncomingMsg(ssub(msg, 6,7), sender)
+                AIO_HandleIncomingMsg(msg, sender)
             end
         end
     end
