@@ -159,7 +159,7 @@ assert(not AIO, "AIO is already loaded. Possibly different versions!")
 -- The defaults are recommended for normal use
 
 -- Enables some additional prints for debugging
-local AIO_ENABLE_DEBUG_MSGS = false -- default false
+local AIO_ENABLE_DEBUG_MSGS = true -- default false
 
 -- Enables pcall to silence errors and continue running normally when an error occurs
 -- If AIO_ENABLE_PCALL is true, errors are printed and running is continued
@@ -174,7 +174,7 @@ local AIO_ENABLE_PCALL = true -- default true
 local AIO_ENABLE_TRACEBACK = false -- default false
 
 -- prints all messages
-local AIO_ENABLE_MSGPRINT = false -- default false
+local AIO_ENABLE_MSGPRINT = true -- default false
 
 -- Max VM instructions to do before timeout
 -- Attempts to avoid server freeze on bad code and or user
@@ -202,13 +202,13 @@ local AIO_UI_INIT_DELAY = 5*1000 -- ms -- default 5*1000
 
 -- Setting to enable and disable LZW compressing for addons
 -- Server side only
-local AIO_MSG_COMPRESS = true -- default true
+local AIO_MSG_COMPRESS = false -- default true
 
 -- Setting to enable and disable obfuscation for code to reduce size
 -- Note that error messages will not have correct line numbers since obfuscation rearranage the code
 -- for debugging purposes it is recommended to disable this option
 -- Server side only
-local AIO_CODE_OBFUSCATE = true -- default true
+local AIO_CODE_OBFUSCATE = false -- default true
 
 -- Setting to send client errors to server
 -- Client must have AIO_ENABLE_PCALL enabled
@@ -470,9 +470,11 @@ local function AIO_SendAddonMessage(msg, player)
     if AIO_SERVER then
         -- server -> client
         player:SendAddonMessage(AIO_ServerPrefix, msg, 7, player)
+		print("Server SendAddonMessage:", AIO_ServerPrefix, msg, 7, player)
     else
         -- client -> server
         C_ChatInfo.SendAddonMessage(AIO_ClientPrefix, AIO_ClientPrefix.."\t"..msg, "WHISPER", UnitName("player"))
+		print("Client SendAddonMessage:",AIO_ClientPrefix, AIO_ClientPrefix.."\t"..msg, "WHISPER", UnitName("player"))
     end
 end
 
@@ -577,6 +579,7 @@ function msgmt:Assemble()
         return self
     end
     self.MSG = Smallfolk.dumps(self.params)
+	print("Smallfolk msgmt:Assemble:", self.MSG)
     self.assemble = false
     return self
 end
@@ -620,6 +623,7 @@ end
 -- for adding handlers for blocks
 local preinitblocks = {}
 local function AIO_HandleBlock(player, data, skipstored)
+	print("AIO_HandleBlock: ", data[2], data[3], skipstored)
     local HandleName = data[2]
     assert(HandleName, "Invalid handle, no handle name")
 
@@ -643,10 +647,13 @@ local function AIO_HandleBlock(player, data, skipstored)
     end
     handledata(player, unpack(data, 3, data[1]+2))
 
+	print("Check zaebal: ", skipstored, AIO_SERVER, AIO_INITED, HandleName, data[3])
+
     if not skipstored and not AIO_SERVER and AIO_INITED and HandleName == 'AIO' and data[3] == 'Init' then
         -- handle stored blocks after initialization, if they are not init messages
         for i = 1, #preinitblocks do
             AIO_HandleBlock(player, preinitblocks[i], true)
+			print("AIO_HandleBlock 2: ", player, preinitblocks[i])
             preinitblocks[i] = nil
         end
     end
@@ -670,6 +677,7 @@ local function _AIO_ParseBlocks(msg, player)
 
     -- deserialize the message
     local data = AIO_pcall(Smallfolk.loads, msg, #msg)
+	print("Smallfolk AIO_pcall:", Smallfolk.loads, msg, #msg)
     if not data or type(data) ~= 'table' then
         AIO_debug("Received invalid message - data not a table")
         return
@@ -677,6 +685,7 @@ local function _AIO_ParseBlocks(msg, player)
 
     -- Handle parsing of all blocks
     for i = 1, #data do
+		print("Send AIO_pcall: ", AIO_HandleBlock, player, data[i])
         -- Using pcall here so errors wont stop handling other blocks in the msg
         AIO_pcall(AIO_HandleBlock, player, data[i])
     end
@@ -692,12 +701,14 @@ end
 -- Handles cleaning and assembling the messages received
 -- Messages can be 255 characters long, so big messages will be split
 local function _AIO_HandleIncomingMsg(msg, player)
+	print("_AIO_HandleIncomingMsg: ", msg, player)
     -- Received a long message part (msg split into 255 character parts)
-    local msgid = ssub(msg, 6,7)
+    local msgid = ssub(msg, 1,2)
+	print("msgid: ", msgid)
 
     if msgid == AIO_ShortMsg then
         -- Received <= 255 char msg, direct parse, take out the msg tag first
-        AIO_ParseBlocks(ssub(msg, 8), player)
+        AIO_ParseBlocks(ssub(msg, 3), player)
         return
     end
 
@@ -712,14 +723,14 @@ local function _AIO_HandleIncomingMsg(msg, player)
     end
 
     local messageId = AIO_stringto16(msgid)
-    local parts = AIO_stringto16(ssub(msg, 8,9))
-    local partId = AIO_stringto16(ssub(msg, 10,11))
+    local parts = AIO_stringto16(ssub(msg, 3,4))
+    local partId = AIO_stringto16(ssub(msg, 5,6))
     if partId <= 0 or partId > parts then
         error("received long message with invalid amount of parts. id, parts: "..partId.." "..parts)
         return
     end
 
-    msg = ssub(msg, 12)
+    msg = ssub(msg, 7)
 
     -- guid is used to store information about long messages for specific player
     local guid = AIO_SERVER and player:GetGUIDLow() or 1
@@ -948,7 +959,9 @@ if AIO_SERVER then
     -- An addon message event handler for the lua engine
     -- If the message data is correct, move the message forward to the AIO message handler.
     local function ONADDONMSG(event, sender, Type, prefix, msg, target)
+		print("Server ONADDONMSG:", event, sender, Type, prefix, msg, target)
         if prefix == AIO_ClientPrefix and tostring(sender) == tostring(target) and #msg < 510 then
+			print("Server AIO_HandleIncomingMsg:", msg, sender)
             AIO_HandleIncomingMsg(msg, sender)
         end
     end
@@ -1005,12 +1018,15 @@ else
     -- A client side event handler
     -- Passes the incoming message to AIO message handler if it is valid
     local function ONADDONMSG(self, event, prefix, msg, Type, sender)
+		print("Client ONADDONMSG:", self, event, prefix, msg, Type, sender)
 		local send = strsplit("-",sender,2)
 		local name = strsplit("-",UnitName("player"),2)
         if prefix == AIO_ServerPrefix then
+			print("Prefix client done:")
             if event == "CHAT_MSG_ADDON" and send == name then
                 -- Normal AIO message handling from addon messages
-                AIO_HandleIncomingMsg(msg, sender)
+				print("Client AIO_HandleIncomingMsg:", msg, sender)
+                AIO_HandleIncomingMsg(ssub(msg, 6,7), sender)
             end
         end
     end

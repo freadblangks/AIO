@@ -246,7 +246,7 @@ local AIO_SERVER = type(GetLuaEngine) == "function"
 -- Client must have same version (basically same AIO file)
 local AIO_VERSION = 1.74
 -- ID characters for client-server messaging
-local AIO_ShortMsg          = schar(1)..schar(1)
+local AIO_ShortMsg          = "SM"
 local AIO_Compressed        = 'C'
 local AIO_Uncompressed      = 'U'
 local AIO_Prefix            = "AIO"
@@ -472,7 +472,7 @@ local function AIO_SendAddonMessage(msg, player)
         player:SendAddonMessage(AIO_ServerPrefix, msg, 7, player)
     else
         -- client -> server
-        SendAddonMessage(AIO_ClientPrefix, msg, "WHISPER", UnitName("player"))
+        C_ChatInfo.SendAddonMessage(AIO_ClientPrefix, AIO_ClientPrefix.."\t"..msg, "WHISPER", UnitName("player"))
     end
 end
 
@@ -1005,15 +1005,24 @@ else
     -- A client side event handler
     -- Passes the incoming message to AIO message handler if it is valid
     local function ONADDONMSG(self, event, prefix, msg, Type, sender)
+		local send = strsplit("-",sender,2)
+		local name = strsplit("-",UnitName("player"),2)
         if prefix == AIO_ServerPrefix then
-            if event == "CHAT_MSG_ADDON" and sender == UnitName("player") then
+            if event == "CHAT_MSG_ADDON" and send == name then
                 -- Normal AIO message handling from addon messages
-                AIO_HandleIncomingMsg(msg, sender)
+                AIO_HandleIncomingMsg(ssub(msg, 6,7), sender)
             end
         end
     end
     local MsgReceiver = CreateFrame("Frame")
     MsgReceiver:RegisterEvent("CHAT_MSG_ADDON")
+	MsgReceiver:RegisterEvent("CHAT_MSG_ADDON_LOGGED")
+    MsgReceiver:RegisterEvent("BN_CHAT_MSG_ADDON")
+    MsgReceiver:RegisterEvent("CHAT_MSG_WHISPER")    
+    MsgReceiver:RegisterEvent("CHAT_MSG_BN_WHISPER")   
+    MsgReceiver:RegisterEvent("CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE")   
+    MsgReceiver:RegisterEvent("CHAT_MSG_WHISPER_INFORM")
+    MsgReceiver:RegisterEvent("CHAT_MSG_SYSTEM") 
     MsgReceiver:SetScript("OnEvent", ONADDONMSG)
 
     -- A block handler for Init name, checks the version number and errors out if needed
@@ -1105,8 +1114,8 @@ else
         if event == "ADDON_LOADED" and addon == "AIO_Client" then
             -- Register addon channel on cata+
             local _,_,_, tocversion = GetBuildInfo()
-            if tocversion and tocversion >= 40100 and RegisterAddonMessagePrefix then
-                RegisterAddonMessagePrefix("C"..AIO_Prefix)
+            if tocversion and tocversion >= 40100 and C_ChatInfo.RegisterAddonMessagePrefix then
+                C_ChatInfo.RegisterAddonMessagePrefix("C"..AIO_Prefix)
             end
 
             -- Our saved variables are ready at this point. If there is no save, they will be nil
