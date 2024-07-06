@@ -1,16 +1,15 @@
 # AIO
 AIO is a pure lua server-client communication system for Eluna and WoW.  
 AIO is designed for sending lua addons and data to player from server and data from player to server.  
-Made for [Eluna Lua Engine](https://github.com/ElunaLuaEngine/Eluna). Tested on 3.3.5a and should work on other patches. Tested with Lua 5.1 and 5.2.  
-[Third party C++ support is made by SaiFi0102](https://github.com/SaiFi0102/TrinityCore/blob/CAIO-3.3.5/CAIO_README.md). It allows you to use AIO without requiring Eluna.
+Made for [Eluna Lua Engine](https://github.com/ElunaLuaEngine/Eluna). Tested on 10.2.6 and should work on other patches (but not for sure, as Blizzard might break something again). Tested with Lua 5.1 and 5.2.
 
-Backlink: https://github.com/Rochet2/AIO
+You need knowledge of writing addons for Dragonflight (old code won't work and will throw an error)
 
 # Installation
-- Make sure you have [Eluna Lua Engine](https://github.com/ElunaLuaEngine/Eluna)
+- Make sure you have [Eluna Lua Engine]([https://github.com/ElunaLuaEngine/Eluna](https://github.com/KamiliaBlow/RoleplayCore))
 - Copy the `AIO_Client` to your `WoW_installation_folder/Interface/AddOns/`
 - Copy the `AIO_Server` to your `server_root/lua_scripts/`
-- See configuration settings on AIO.lua file. You can tweak both the server and client file respectively
+- See configuration settings on AIO.lua file. You can tweak both the server and client files respectively (the files are different, this is done to work with version 10.2.6).
 - When developing an addon it is recommended to have AIO_ENABLE_PCALL off and sometimes you may need AIO_ENABLE_DEBUG_MSGS on to see some information about what is going on.
 
 # About
